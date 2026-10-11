@@ -1,0 +1,13 @@
+{
+  "_comment": "Named fittings. Key = component name without the f_ prefix. depth \"F\" = through. dx/dy = offset (mm) from the component origin in its local XY plane. CHECK ALL VALUES before production use.",
+
+  "confirmat_face":       [ { "d": 7,  "depth": "F" } ],
+  "confirmat_edge":       [ { "d": 5,  "depth": 50 } ],
+
+  "minifix_face":         [ { "d": 15, "depth": 13 } ],
+  "minifix_edge":         [ { "d": 8,  "depth": 33 } ],
+
+  "minifix_shkant_front": [ { "d": 8,  "depth": 11 } ],
+  "minifix_shkant_edge":  [ { "d": 8,  "depth": 22 } ],
+  "minifx_shkant_edge":   [ { "d": 8,  "depth": 22 } ]
+}
