@@ -184,6 +184,9 @@ Other operation types Bazis2Viyar writes, for future features: `grooving`, `rabb
 
 ## Development
 
+- The ViyarPro format comes from reverse engineering Viyar's Bazis2Viyar script; see
+  [docs/bazis2viyar.md](docs/bazis2viyar.md) for how, and for the steps when a new version appears.
+
 - Dev install: copy `tools/dev_loader.rb` into SketchUp's `Plugins` folder, restart SketchUp, then use
   **Reload extension (dev)** after edits.
 - Build the installable package: `python3 tools/build_rbz.py` → `dist/ocl_viyar_<version>.rbz`.
