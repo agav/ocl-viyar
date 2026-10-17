@@ -99,6 +99,25 @@ f_<spec>[ <free comment>]
 `dx` / `dy` are mm offsets in the feature component's local X/Y plane. `"countersink": true` marks a confirmat
 hole with countersink.
 
+## Grooves and rabbets (push/pull)
+
+Grooves are modeled in the panel's own geometry with push/pull (ViyarPro format only; the GibLab
+export reports them as not exported). Every rectangular recess has a **floor**: a flat face parallel
+to a panel face or an edge, inside the panel. The floor gives the removed box, which is classified like
+Bazis2Viyar does:
+
+| Recess | ViyarPro operation |
+|---|---|
+| open to the front/back face, not reaching the edge it runs along | `grooving` (паз), `side` 1/6 |
+| open to the front/back face and reaching that edge | `rabbeting` (четверть), `edge` 2–5 |
+| open to an edge face only (slot in the edge) | `grooving` in the edge, `side` 2–5 |
+
+- A recess runs along y if it is longer in y, otherwise along x. A through groove simply spans the panel.
+- A floor split by drawn lines is joined back into one recess.
+- Not exported (reported): non-rectangular floors (L-shapes, crossing grooves, curved ends), recesses
+  through the whole thickness, edge slots reaching two edges.
+- Groups and Cuts-opening components inside the panel count as panel geometry; `f_`/`g_` subtrees don't.
+
 ## Panel coordinate frame
 
 Seen from the **front** face:
@@ -168,7 +187,7 @@ Other operation types Bazis2Viyar writes, for future features: `grooving`, `rabb
 - Dev install: copy `tools/dev_loader.rb` into SketchUp's `Plugins` folder, restart SketchUp, then use
   **Reload extension (dev)** after edits.
 - Build the installable package: `python3 tools/build_rbz.py` → `dist/ocl_viyar_<version>.rbz`.
-- `features.rb`, `sjcl.rb`, `viyar_writer.rb` and `giblab_writer.rb` are plain Ruby (no SketchUp API). Run their tests with
+- `features.rb`, `grooves.rb`, `sjcl.rb`, `viyar_writer.rb` and `giblab_writer.rb` are plain Ruby (no SketchUp API). Run their tests with
   `for t in test/test_*.rb; do ruby -w "$t"; done`.
 - Write a sample `.project` for a manual ViyarPro import check:
   `OCL_VIYAR_SAMPLE_OUT=/mnt/c/prj/ocl_viyar_test.project ruby test/test_viyar_writer.rb -n test_write_sample_project`
@@ -176,4 +195,5 @@ Other operation types Bazis2Viyar writes, for future features: `grooving`, `rabb
 
 ## Not yet supported
 
-Grooves and rabbets, corner processing, cut-outs, clipping of parts under 70 mm, edge bevels, fittings (`products`).
+Corner processing, cut-outs, clipping of parts under 70 mm, edge bevels, fittings (`products`), groove
+`closed` flag and rounded groove corners (`radius`).

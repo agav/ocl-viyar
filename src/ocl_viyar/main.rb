@@ -4,7 +4,7 @@ require 'json'
 module OclViyar
 
   PLUGIN_ROOT = File.dirname(__FILE__)
-  SOURCE_FILES = %w[features collector sjcl viyar_writer giblab_writer].freeze
+  SOURCE_FILES = %w[features grooves collector sjcl viyar_writer giblab_writer].freeze
   MODEL_PRESETS_FILE = 'viyar_presets.json'
 
   SOURCE_FILES.each { |f| require File.join(PLUGIN_ROOT, f) }
@@ -37,6 +37,9 @@ module OclViyar
     return if project.nil?
     stem = path.sub(/\.project\z/i, '')
     File.open(path, 'w:UTF-8') { |f| f.write(GiblabWriter.new(project).to_xml) }
+    project[:parts].reject { |p| p[:grooves].empty? }.each do |p|
+      project[:warnings] << "#{p[:number]} #{p[:name]}: #{p[:grooves].length} groove(s) not exported, GibLab export supports drillings only"
+    end
     _finish(project, stem, [ path ])
   rescue StandardError => e
     UI.messagebox("Export failed: #{e.message}\n\n#{e.backtrace.first(5).join("\n")}")
@@ -91,6 +94,7 @@ module OclViyar
     paths.each { |path| lines << "Exported to #{path}" }
     lines << "Parts: #{project[:parts].length} distinct, #{part_count} total"
     lines << "Holes: #{hole_count} total"
+    lines << "Grooves: #{project[:parts].map { |p| p[:grooves].length * p[:count] }.reduce(0, :+)} total"
     lines << "Materials: #{project[:materials].map { |m| m[:name] }.join(', ')}"
     lines << "Edge bands: #{project[:bands].map { |b| "#{b[:name]} (#{b[:thickness]})" }.join(', ')}"
     lines << ''

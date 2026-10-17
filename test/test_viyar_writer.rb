@@ -2,6 +2,7 @@ require 'minitest/autorun'
 require 'rexml/document'
 require 'json'
 require_relative '../src/ocl_viyar/sjcl'
+require_relative '../src/ocl_viyar/grooves'
 require_relative '../src/ocl_viyar/viyar_writer'
 require_relative 'sample_project'
 
@@ -94,6 +95,48 @@ class TestViyarWriter < Minitest::Test
                                     { side: :front, x: 80.0, y: 9.0, z: 18.0, d: 7.0, depth: nil } ]
     o = ops(parse(OclViyar::ViyarWriter.new(@project).to_xml(KEY)).get_elements('//detail')[0])
     assert_equal [ %w[48 7 23.0], [ nil, '7', '23.0' ] ], o.map { |op| values(op, 'subtype', 'd', 'depth') }
+  end
+
+  def grooves_ops(boxes)
+    @project[:parts][1].merge!(length: 720.0, width: 560.0, grooves: boxes)
+    w = OclViyar::ViyarWriter.new(@project)
+    [ ops(parse(w.to_xml(KEY)).get_elements('//detail')[1]), w.warnings ]
+  end
+
+  def test_grooves_and_rabbets
+    o, warnings = grooves_ops([
+      { x: [ 530.0, 533.0 ], y: [ 0.0, 560.0 ], z: [ 13.0, 18.0 ] },   # паз on the front, along y
+      { x: [ 0.0, 720.0 ], y: [ 100.0, 104.0 ], z: [ 0.0, 6.0 ] },     # паз on the back, along x
+      { x: [ 712.0, 720.0 ], y: [ 0.0, 560.0 ], z: [ 0.0, 9.0 ] },     # четверть on the back, right edge
+      { x: [ 0.0, 720.0 ], y: [ 550.0, 560.0 ], z: [ 10.0, 18.0 ] },   # четверть on the front, top edge
+      { x: [ 100.0, 300.0 ], y: [ 550.0, 560.0 ], z: [ 6.0, 10.0 ] },  # паз in the top edge
+      { x: [ 0.0, 12.0 ], y: [ 50.0, 450.0 ], z: [ 6.0, 10.0 ] }       # паз in the left edge
+    ])
+    assert_empty warnings.grep(/B shelf/)
+    summary = o.map { |op| op.attributes.to_a.map { |a| "#{a.name}=#{a.value}" }.join(' ') }
+    assert_equal [
+      'id=1 type=grooving side=1 subtype=1 x=530.0 y=0 width=3.0 length=560.0 closed=0 depth=5.0',
+      'id=2 type=grooving side=6 subtype=0 x=0 y=100.0 width=4.0 length=720.0 closed=0 depth=6.0',
+      'id=3 type=rabbeting side=6 subtype= edge=4 shift=0 width=8.0 length=560.0 closed=0 depth=9.0',
+      'id=4 type=rabbeting side=1 subtype= edge=3 shift=0 width=10.0 length=720.0 closed=0 depth=8.0',
+      'id=5 type=grooving side=3 subtype=0 x=100.0 y=8.0 width=4.0 length=200.0 closed=0 depth=10.0',
+      'id=6 type=grooving side=2 subtype=1 x=8.0 y=50.0 width=4.0 length=400.0 closed=0 depth=12.0'
+    ], summary
+  end
+
+  def test_grooves_follow_drillings
+    @project[:parts][1][:holes] = [ { side: :front, x: 50.0, y: 50.0, z: 18.0, d: 5.0, depth: 10.0 } ]
+    o, = grooves_ops([ { x: [ 530.0, 533.0 ], y: [ 0.0, 560.0 ], z: [ 13.0, 18.0 ] } ])
+    assert_equal [ %w[1 drilling], %w[2 grooving] ], o.map { |op| values(op, 'id', 'type') }
+  end
+
+  def test_unsupported_recesses_are_reported
+    o, warnings = grooves_ops([
+      { x: [ 100.0, 200.0 ], y: [ 100.0, 200.0 ], z: [ 0.0, 18.0 ] },   # through the thickness
+      { x: [ 0.0, 10.0 ], y: [ 550.0, 560.0 ], z: [ 6.0, 10.0 ] }       # edge slot at a corner
+    ])
+    assert_empty o
+    assert_equal 2, warnings.grep(/B shelf: (recess through|edge groove)/).length
   end
 
   def test_not_grained_and_small_part_warning

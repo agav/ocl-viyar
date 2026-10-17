@@ -132,19 +132,71 @@ module OclViyar
       end
       x << "</edges>\n"
 
-      drillings = part[:holes].map { |h| _drilling(part, h) }
-      unless drillings.empty?
+      operations = part[:holes].map { |h| _drilling_attrs(_drilling(part, h)) }
+      (part[:grooves] || []).each do |box|
+        attrs = _groove_attrs(part, box, label)
+        operations << attrs unless attrs.nil?
+      end
+      unless operations.empty?
         x << _open('operations')
-        drillings.each_with_index do |d, i|
-          attrs = { 'id' => i + 1, 'type' => 'drilling' }
-          attrs['subtype'] = COUNTERSINK_SUBTYPE if d[:countersink]
-          attrs.merge!('side' => d[:side], 'x' => _fixed(d[:x]), 'y' => _fixed(d[:y]), 'xo' => _fixed(d[:x]), 'yo' => _fixed(d[:y]),
-                       'xl' => '0', 'yl' => '0', 'd' => _num(d[:d], 1), 'depth' => _fixed(d[:depth]))
-          x << _tag('operation', attrs)
-        end
+        operations.each_with_index { |attrs, i| x << _tag('operation', { 'id' => i + 1 }.merge(attrs)) }
         x << "</operations>\n"
       end
       x << "</detail>\n"
+    end
+
+    def _drilling_attrs(d)
+      attrs = { 'type' => 'drilling' }
+      attrs['subtype'] = COUNTERSINK_SUBTYPE if d[:countersink]
+      attrs.merge('side' => d[:side], 'x' => _fixed(d[:x]), 'y' => _fixed(d[:y]), 'xo' => _fixed(d[:x]), 'yo' => _fixed(d[:y]),
+                  'xl' => '0', 'yl' => '0', 'd' => _num(d[:d], 1), 'depth' => _fixed(d[:depth]))
+    end
+
+    # Box of removed material (Collector frame) -> Bazis2Viyar grooving / rabbeting attributes, or nil.
+    # Like Bazis2Viyar's plane cuts: a box open to the front or back face is a groove (паз), or a
+    # rabbet (четверть) when it also reaches the panel edge it runs along; a box open to an edge
+    # face only is a groove in that edge. Runs along y (subtype 1) when longer in y, else along x (0).
+    def _groove_attrs(part, box, label)
+      l, w, t = part[:length], part[:width], part[:thickness]
+      (x1, x2), (y1, y2), (z1, z2) = box[:x], box[:y], box[:z]
+      front = (z2 - t).abs <= Grooves::EDGE_TOL
+      back = z1.abs <= Grooves::EDGE_TOL
+      touch = ->(v, limit) { (v - limit).abs <= Grooves::EDGE_TOL }
+
+      if front && back
+        @warnings << "#{label}: recess through the whole thickness (#{Grooves.describe(box)}) is not a groove, skipped"
+        return nil
+      end
+
+      if front || back
+        side = front ? SIDE_FRONT : SIDE_BACK
+        vertical = (y2 - y1) > (x2 - x1)
+        edge = if vertical
+                 touch.(x2, l) ? SIDE_RIGHT : (touch.(x1, 0) ? SIDE_LEFT : nil)
+               else
+                 touch.(y2, w) ? SIDE_TOP : (touch.(y1, 0) ? SIDE_BOTTOM : nil)
+               end
+        across, along = vertical ? [ x2 - x1, [ y1, y2 ] ] : [ y2 - y1, [ x1, x2 ] ]
+        common = { 'width' => _fixed(across), 'length' => _fixed(along[1] - along[0]), 'closed' => 0, 'depth' => _fixed(z2 - z1) }
+        if edge
+          { 'type' => 'rabbeting', 'side' => side, 'subtype' => '', 'edge' => edge, 'shift' => _fixed(along[0]) }.merge(common)
+        else
+          { 'type' => 'grooving', 'side' => side, 'subtype' => vertical ? 1 : 0, 'x' => _fixed(x1), 'y' => _fixed(y1) }.merge(common)
+        end
+      else
+        edges = [ [ SIDE_LEFT, touch.(x1, 0) ], [ SIDE_RIGHT, touch.(x2, l) ], [ SIDE_BOTTOM, touch.(y1, 0) ], [ SIDE_TOP, touch.(y2, w) ] ]
+                .select(&:last).map(&:first)
+        if edges.length != 1
+          @warnings << "#{label}: edge groove #{Grooves.describe(box)} must open to exactly one edge, skipped"
+          return nil
+        end
+        edge = edges.first
+        across = t - z2   # from the front face
+        vertical = [ SIDE_LEFT, SIDE_RIGHT ].include?(edge)
+        x, y, length, depth = vertical ? [ across, y1, y2 - y1, x2 - x1 ] : [ x1, across, x2 - x1, y2 - y1 ]
+        { 'type' => 'grooving', 'side' => edge, 'subtype' => vertical ? 1 : 0, 'x' => _fixed(x), 'y' => _fixed(y),
+          'width' => _fixed(z2 - z1), 'length' => _fixed(length), 'closed' => 0, 'depth' => _fixed(depth) }
+      end
     end
 
     # Hole (Collector frame, z from the back face) -> Bazis2Viyar drilling

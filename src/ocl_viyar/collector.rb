@@ -177,6 +177,7 @@ module OclViyar
       end
 
       holes = _holes(instance_info.definition, frame, [ length, width, thickness ], pdef.flipped, label)
+      grooves = _grooves(instance_info.definition, frame, [ length, width, thickness ], pdef.flipped, label)
 
       {
         number: part.number,
@@ -187,7 +188,8 @@ module OclViyar
         width: width,
         thickness: thickness,
         edges: edges,
-        holes: holes
+        holes: holes,
+        grooves: grooves
       }
     end
 
@@ -276,25 +278,50 @@ module OclViyar
 
     # Faces bounds of the panel like OpenCutList computes them (groups and Cuts-opening components
     # count as panel geometry), but without f_/g_ feature subtrees.
-    def _panel_bounds(container, transformation = nil)
+    def _panel_bounds(container)
       bounds = Geom::BoundingBox.new
+      _each_panel_face(container) do |face, t|
+        if t
+          face.vertices.each { |v| bounds.add(v.position.transform(t)) }
+        else
+          bounds.add(face.bounds)
+        end
+      end
+      bounds
+    end
+
+    # Yields each visible face of the panel geometry with its transformation into the panel
+    # definition (nil at the top level), skipping f_/g_ feature subtrees.
+    def _each_panel_face(container, transformation = nil, &block)
       container.entities.each do |entity|
         next if entity.is_a?(Sketchup::Edge)
         next unless entity.visible? && entity.layer.visible?
         if entity.is_a?(Sketchup::Face)
-          if transformation
-            entity.vertices.each { |v| bounds.add(v.position.transform(transformation)) }
-          else
-            bounds.add(entity.bounds)
-          end
+          yield entity, transformation
         elsif entity.is_a?(Sketchup::Group) || (entity.is_a?(Sketchup::ComponentInstance) && entity.definition.behavior.cuts_opening?)
           next unless _feature_entity_name(entity).nil?
           t = transformation ? transformation * entity.transformation : entity.transformation
-          sub = _panel_bounds(entity.definition, t)
-          bounds.add(sub) unless sub.empty?
+          _each_panel_face(entity.definition, t, &block)
         end
       end
-      bounds
+    end
+
+    # Grooves and rabbets modeled with push/pull, as boxes of removed material (mm, panel frame)
+    def _grooves(definition, frame, size, flipped, label)
+      thickness = size[2]
+      faces = []
+      _each_panel_face(definition) do |face, t|
+        points = face.outer_loop.vertices.map do |v|
+          x, y, z = frame.local_point(t ? v.position.transform(t) : v.position).map { |c| _mm(c) }
+          flipped ? [ x, y, (thickness - z).round(2) ] : [ x, y, z ]
+        end
+        normal = frame.local_vector(t ? face.normal.transform(t) : face.normal)
+        normal = [ normal[0], normal[1], -normal[2] ] if flipped
+        faces << { points: points, normal: normal }
+      end
+      boxes, warnings = Grooves.find(faces, size)
+      warnings.each { |w| @warnings << "#{label}: #{w}" }
+      boxes
     end
 
     # Feature origin lying on exactly one panel face plane decides the side.
