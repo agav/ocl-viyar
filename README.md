@@ -70,13 +70,16 @@ f_<spec>[ <free comment>]
 |---|---|---|
 | `d<D>x<depth>` | one hole, diameter × depth in mm (`.` or `,` as decimal) | `f_d5x11.5`, `f_d35x12`, `f_d8x33` |
 | `d<D>xF` | through hole | `f_d7xF` |
+| `d<D>x<depth>c`, `d<D>xFc` | confirmat hole with countersink (ViyarPro `subtype="48"`) | `f_d7xFc` |
 | `<preset>` | named fitting from `presets.json` (can contain several holes) | `f_confirmat_face`, `f_minifix_edge` |
 
 - Text after the first space is ignored (comment): `f_d5x11.5 shelf pin`.
 - SketchUp's uniqueness suffixes are ignored: `f_d5x11.5#1`, `f_d5x11.5_1`.
 - Face vs. edge is always taken from the geometry; `_face` / `_edge` in a preset name is only a label.
 - A through hole on a face gets depth = thickness + 5 mm (ViyarPro format, like Bazis2Viyar) or + 2 mm (GibLab). A depth ≥ thickness also counts as through. Through holes on edges are not supported.
-- ViyarPro format: a 7.1 mm hole is exported as a 7 mm confirmat hole with countersink (subtype `48`), the Bazis2Viyar convention.
+- ViyarPro format: a countersunk hole (`c` suffix, or `"countersink": true` in a preset hole) is exported as
+  `subtype="48"`. A 7.1 mm hole is also exported as a 7 mm countersunk hole, the Bazis2Viyar convention.
+  The GibLab export ignores countersinks.
 - Edge holes keep their position across the thickness in the ViyarPro format. GibLab exports them centered; a warning is reported if the component is off-center.
 - Mirrored (flipped) panel instances: holes move to the opposite face.
 
@@ -93,7 +96,8 @@ f_<spec>[ <free comment>]
 }
 ```
 
-`dx` / `dy` are mm offsets in the feature component's local X/Y plane.
+`dx` / `dy` are mm offsets in the feature component's local X/Y plane. `"countersink": true` marks a confirmat
+hole with countersink.
 
 ## Panel coordinate frame
 

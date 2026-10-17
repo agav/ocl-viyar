@@ -38,6 +38,14 @@ class TestFeatures < Minitest::Test
     assert_equal [ { d: 7.0, depth: nil, dx: 0.0, dy: 0.0 } ], F.resolve('f_d7xf', @presets)
   end
 
+  def test_countersink_suffix
+    assert_equal [ { d: 7.0, depth: nil, dx: 0.0, dy: 0.0, countersink: true } ], F.resolve('f_d7xFc', @presets)
+    assert_equal [ { d: 7.0, depth: nil, dx: 0.0, dy: 0.0, countersink: true } ], F.resolve('f_d7xfc#2', @presets)
+    assert_equal [ { d: 7.0, depth: nil, dx: 0.0, dy: 0.0, countersink: true } ], F.resolve('f_d7xFc_1 confirmat', @presets)
+    assert_equal [ { d: 7.0, depth: 40.0, dx: 0.0, dy: 0.0, countersink: true } ], F.resolve('f_d7x40c', @presets)
+    assert_nil F.resolve('f_d7xFx', @presets)
+  end
+
   def test_copy_suffixes
     assert_equal 11.5, F.resolve('f_d5x11.5_1', @presets).first[:depth]
     assert_equal 11.5, F.resolve('f_d5x11.5#2', @presets).first[:depth]
@@ -59,13 +67,14 @@ class TestFeatures < Minitest::Test
     Dir.mktmpdir do |dir|
       a = File.join(dir, 'a.json')
       b = File.join(dir, 'b.json')
-      File.write(a, '{"_comment":"x","Hinge":[{"d":35,"depth":12},{"d":8,"depth":"F","dx":-22.5,"dy":9.5}],"keep":[{"d":5,"depth":10}]}')
+      File.write(a, '{"_comment":"x","Hinge":[{"d":35,"depth":12},{"d":8,"depth":"F","dx":-22.5,"dy":9.5}],"keep":[{"d":7,"depth":"F","countersink":true}]}')
       File.write(b, '{"hinge":[{"d":26,"depth":11}]}')
       presets = F.load_presets(a, b, File.join(dir, 'missing.json'))
       assert_equal %w[hinge keep], presets.keys.sort
       assert_equal [ { d: 26.0, depth: 11.0, dx: 0.0, dy: 0.0 } ], presets['hinge']
       presets = F.load_presets(a)
       assert_equal({ d: 8.0, depth: nil, dx: -22.5, dy: 9.5 }, presets['hinge'][1])
+      assert_equal [ { d: 7.0, depth: nil, dx: 0.0, dy: 0.0, countersink: true } ], presets['keep']
     end
   end
 

@@ -229,7 +229,9 @@ module OclViyar
               @warnings << "#{label}: edge hole '#{source}' is #{z} mm from the back face, off-center (the GibLab export centers it)"
             end
           end
-          holes << { side: hole_side, x: x, y: y, z: z, d: spec[:d], depth: depth, source: source }
+          hole = { side: hole_side, x: x, y: y, z: z, d: spec[:d], depth: depth, source: source }
+          hole[:countersink] = true if spec[:countersink]
+          holes << hole
         end
       end
 

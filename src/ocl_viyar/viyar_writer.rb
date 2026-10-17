@@ -22,7 +22,7 @@ module OclViyar
     SHEET_SIZE = 3000
     THROUGH_EXTRA = 5.0
     MIN_PART_SIZE = 70.0
-    COUNTERSINK_D = 7.1   # Bazis2Viyar exports a 7.1 hole as a 7 mm confirmat hole with countersink
+    COUNTERSINK_D = 7.1   # Bazis2Viyar convention: a 7.1 hole is a 7 mm confirmat hole with countersink
     COUNTERSINK_SUBTYPE = '48'
     CONFIRMAT_D = 7.0
     ARTICLE_KEY = '(Артикул'
@@ -160,9 +160,10 @@ module OclViyar
                    when :top then [ SIDE_TOP, hole[:x], across ]
                    else raise ArgumentError, "Unknown hole side #{hole[:side].inspect}"
                    end
-      countersink = (hole[:d] - COUNTERSINK_D).abs < 0.01
+      bazis_countersink = (hole[:d] - COUNTERSINK_D).abs < 0.01
       depth = hole[:depth].nil? ? t + THROUGH_EXTRA : hole[:depth]
-      { side: side, x: x, y: y, d: countersink ? CONFIRMAT_D : hole[:d], depth: depth, countersink: countersink }
+      { side: side, x: x, y: y, d: bazis_countersink ? CONFIRMAT_D : hole[:d], depth: depth,
+        countersink: bazis_countersink || hole[:countersink] == true }
     end
 
     # Bazis2Viyar's rnd(): fixed one decimal ("12.0"), "0" for zero

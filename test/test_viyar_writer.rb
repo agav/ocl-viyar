@@ -89,6 +89,13 @@ class TestViyarWriter < Minitest::Test
     assert_equal %w[48 7 23.0], values(op, 'subtype', 'd', 'depth')
   end
 
+  def test_countersink_flag
+    @project[:parts][0][:holes] = [ { side: :front, x: 50.0, y: 9.0, z: 18.0, d: 7.0, depth: nil, countersink: true },
+                                    { side: :front, x: 80.0, y: 9.0, z: 18.0, d: 7.0, depth: nil } ]
+    o = ops(parse(OclViyar::ViyarWriter.new(@project).to_xml(KEY)).get_elements('//detail')[0])
+    assert_equal [ %w[48 7 23.0], [ nil, '7', '23.0' ] ], o.map { |op| values(op, 'subtype', 'd', 'depth') }
+  end
+
   def test_not_grained_and_small_part_warning
     @project[:materials][0][:grained] = false
     @project[:parts][1][:width] = 60.0

@@ -8,12 +8,13 @@ module OclViyar
   #   d:       diameter, mm
   #   depth:   depth, mm, or nil for a through hole
   #   dx, dy:  offset from the feature component origin in its local XY plane, mm
+  #   countersink: true for a confirmat hole with countersink (key present only when set)
   #
   # Pure Ruby (no SketchUp API), so it can be tested outside SketchUp.
   module Features
 
     NUM = '\d+(?:[.,]\d+)?'
-    PLAIN_RE = /\Af_d(#{NUM})x(F|#{NUM})\z/i
+    PLAIN_RE = /\Af_d(#{NUM})x(F|#{NUM})(c)?\z/i
     COPY_SUFFIX_RE = /_\d+\z/
 
     # Returns the feature name to parse: drops SketchUp's "#1" uniqueness suffix and anything after
@@ -42,7 +43,9 @@ module OclViyar
       return nil if base.nil?
       [ base, base.sub(COPY_SUFFIX_RE, '') ].uniq.each do |candidate|
         if (m = PLAIN_RE.match(candidate))
-          return [ { d: to_f(m[1]), depth: m[2].upcase == 'F' ? nil : to_f(m[2]), dx: 0.0, dy: 0.0 } ]
+          hole = { d: to_f(m[1]), depth: m[2].upcase == 'F' ? nil : to_f(m[2]), dx: 0.0, dy: 0.0 }
+          hole[:countersink] = true if m[3]
+          return [ hole ]
         end
         key = candidate.sub(/\Af_/i, '').downcase
         return presets[key] if presets.key?(key)
@@ -51,7 +54,7 @@ module OclViyar
     end
 
     # Loads presets from the given JSON files (later files override earlier ones).
-    # File format: { "preset_name": [ { "d": 7, "depth": "F", "dx": 0, "dy": 0 }, ... ], ... }
+    # File format: { "preset_name": [ { "d": 7, "depth": "F", "dx": 0, "dy": 0, "countersink": true }, ... ], ... }
     def self.load_presets(*paths)
       presets = {}
       paths.flatten.compact.each do |path|
@@ -67,7 +70,9 @@ module OclViyar
     def self.parse_preset_hole(h, key)
       raise ArgumentError, "Preset '#{key}': hole needs 'd' and 'depth'" unless h['d'] && h['depth']
       depth = h['depth'].to_s.upcase == 'F' ? nil : to_f(h['depth'])
-      { d: to_f(h['d']), depth: depth, dx: to_f(h['dx'] || 0), dy: to_f(h['dy'] || 0) }
+      hole = { d: to_f(h['d']), depth: depth, dx: to_f(h['dx'] || 0), dy: to_f(h['dy'] || 0) }
+      hole[:countersink] = true if h['countersink'] == true
+      hole
     end
 
     def self.to_f(s)
