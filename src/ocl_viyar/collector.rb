@@ -49,7 +49,7 @@ module OclViyar
   end
 
   # Runs OpenCutList's cutlist generator and converts sheet-good parts into a plain project Hash
-  # (millimeters, no SketchUp objects) consumed by GiblabWriter.
+  # (millimeters, no SketchUp objects) consumed by ViyarWriter and GiblabWriter.
   class Collector
 
     INCH = 25.4
@@ -127,7 +127,15 @@ module OclViyar
       rescue StandardError
         # keep default sheet size
       end
-      { key: key, name: group.material_display_name, thickness: thickness, length: length, width: width }
+      { key: key, name: group.material_display_name, thickness: thickness, length: length, width: width, grained: _grained(gdef) }
+    end
+
+    # Unknown -> true: keeps the texture along the part length
+    def _grained(gdef)
+      attributes = gdef.material_attributes
+      attributes.respond_to?(:grained) ? attributes.grained != false : true
+    rescue StandardError
+      true
     end
 
     def _part(part, material_key, bands)
@@ -208,7 +216,7 @@ module OclViyar
               next
             end
             if (z - thickness / 2.0).abs > TOL_MM
-              @warnings << "#{label}: edge hole '#{source}' is #{z} mm from the back face, exported as centered"
+              @warnings << "#{label}: edge hole '#{source}' is #{z} mm from the back face, off-center (the GibLab export centers it)"
             end
           end
           holes << { side: hole_side, x: x, y: y, z: z, d: spec[:d], depth: depth, source: source }

@@ -4,20 +4,54 @@ require 'json'
 module OclViyar
 
   PLUGIN_ROOT = File.dirname(__FILE__)
-  SOURCE_FILES = %w[features collector giblab_writer].freeze
+  SOURCE_FILES = %w[features collector sjcl viyar_writer giblab_writer].freeze
   MODEL_PRESETS_FILE = 'viyar_presets.json'
 
   SOURCE_FILES.each { |f| require File.join(PLUGIN_ROOT, f) }
 
+  # ViyarPro project format (as written by Bazis2Viyar), loaded in ViyarPro's order constructor.
   def self.export
+    project, path = _collect('Export to ViyarPro')
+    return if project.nil?
+    stem = path.sub(/\.project\z/i, '')
+
+    writer = ViyarWriter.new(project)
+    keys = writer.material_keys
+    written = keys.map do |key|
+      material = project[:materials].find { |m| m[:key] == key }
+      file_stem = keys.length == 1 ? stem : "#{stem}_#{_file_safe(material[:name])}_#{_fmt_mm(material[:thickness])}"
+      File.open("#{file_stem}.project", 'w:UTF-8') { |f| f.write(writer.to_project(key)) }
+      # unencrypted copy for checking, in the encoding its XML declaration names
+      File.open("#{file_stem}.xml", 'wb') { |f| f.write(writer.to_xml(key).encode('Windows-1251', undef: :replace, invalid: :replace)) }
+      "#{file_stem}.project"
+    end
+    project[:warnings].concat(writer.warnings.uniq)
+    _finish(project, stem, written)
+  rescue StandardError => e
+    UI.messagebox("Export failed: #{e.message}\n\n#{e.backtrace.first(5).join("\n")}")
+  end
+
+  # GibLab XML, imported via viyar.pro → Conversion → GibLab. Drillings only.
+  def self.export_giblab
+    project, path = _collect('Export to Viyar (GibLab)')
+    return if project.nil?
+    stem = path.sub(/\.project\z/i, '')
+    File.open(path, 'w:UTF-8') { |f| f.write(GiblabWriter.new(project).to_xml) }
+    _finish(project, stem, [ path ])
+  rescue StandardError => e
+    UI.messagebox("Export failed: #{e.message}\n\n#{e.backtrace.first(5).join("\n")}")
+  end
+
+  # Returns [ project, chosen *.project path ] or nil
+  def self._collect(title)
     model = Sketchup.active_model
     unless defined?(Ladb::OpenCutList::PLUGIN)
       UI.messagebox('OpenCutList is not installed or not loaded.')
-      return
+      return nil
     end
     if model.path.empty?
       UI.messagebox('Save the model first.')
-      return
+      return nil
     end
 
     presets = Features.load_presets(File.join(PLUGIN_ROOT, 'presets.json'),
@@ -25,30 +59,36 @@ module OclViyar
     project = Collector.new(model, presets).run
     if project[:parts].empty?
       UI.messagebox("No sheet-good parts found.\n\n#{project[:warnings].first(20).join("\n")}")
-      return
+      return nil
     end
 
     base = File.basename(model.path, '.skp')
-    path = UI.savepanel('Export to Viyar (GibLab)', File.dirname(model.path), "#{base}.project")
-    return if path.nil?
+    path = UI.savepanel(title, File.dirname(model.path), "#{base}.project")
+    return nil if path.nil?
     path += '.project' unless path.downcase.end_with?('.project')
-    stem = path.sub(/\.project\z/i, '')
-
-    File.open(path, 'w:UTF-8') { |f| f.write(GiblabWriter.new(project).to_xml) }
-    File.open("#{stem}.json", 'w:UTF-8') { |f| f.write(JSON.pretty_generate(project)) }
-    report = _report(project, path)
-    File.open("#{stem}.report.txt", 'w:UTF-8') { |f| f.write(report) }
-
-    UI.messagebox(report.lines.first(25).join)
-  rescue StandardError => e
-    UI.messagebox("Export failed: #{e.message}\n\n#{e.backtrace.first(5).join("\n")}")
+    [ project, path ]
   end
 
-  def self._report(project, path)
+  def self._finish(project, stem, written)
+    File.open("#{stem}.json", 'w:UTF-8') { |f| f.write(JSON.pretty_generate(project)) }
+    report = _report(project, written)
+    File.open("#{stem}.report.txt", 'w:UTF-8') { |f| f.write(report) }
+    UI.messagebox(report.lines.first(25).join)
+  end
+
+  def self._file_safe(name)
+    name.to_s.gsub(/[\/\\:*?"<>|]/, ' ').strip
+  end
+
+  def self._fmt_mm(v)
+    v.to_f == v.to_i ? v.to_i.to_s : v.to_s
+  end
+
+  def self._report(project, paths)
     hole_count = project[:parts].map { |p| p[:holes].length * p[:count] }.reduce(0, :+)
     part_count = project[:parts].map { |p| p[:count] }.reduce(0, :+)
     lines = []
-    lines << "Exported to #{path}"
+    paths.each { |path| lines << "Exported to #{path}" }
     lines << "Parts: #{project[:parts].length} distinct, #{part_count} total"
     lines << "Holes: #{hole_count} total"
     lines << "Materials: #{project[:materials].map { |m| m[:name] }.join(', ')}"
@@ -70,7 +110,8 @@ module OclViyar
 
   unless file_loaded?(__FILE__)
     menu = UI.menu('Extensions').add_submenu('OCL Viyar Export')
-    menu.add_item('Export to Viyar (GibLab)...') { export }
+    menu.add_item('Export to ViyarPro...') { export }
+    menu.add_item('Export to Viyar (GibLab)...') { export_giblab }
     menu.add_item('Reload extension (dev)') { reload }
 
     file_loaded(__FILE__)

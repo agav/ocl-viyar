@@ -2,17 +2,24 @@
 
 SketchUp extension that works next to [OpenCutList](https://github.com/lairdubois/lairdubois-opencutlist-sketchup-extension)
 (tested against v7.1.0). It runs OpenCutList's cutlist generator, takes the sheet-good parts with their
-edge banding, adds drillings modeled as nested components, and writes a GibLab XML file (`*.project`)
-that ViyarPro imports via **Conversion → GibLab**.
+edge banding, adds drillings modeled as nested components, and writes a ViyarPro project file (`*.project`).
+
+Two output formats:
+- **ViyarPro project** (default): the format the Bazis2Viyar script (Bazis-Mebelshchik → ViyarPro, v5.10)
+  writes. Load it in ViyarPro's order constructor with **Load from file**. This format has native
+  operations for grooves, rabbets, corner processing and cut-outs, so new features go here.
+- **GibLab XML** (legacy): imported via viyar.pro → **Conversion → GibLab**. Drillings only.
 
 OpenCutList itself is not modified, so it keeps updating normally from the Extension Warehouse.
 
 ## Usage
 
 1. Select the furniture to export (or nothing, for the whole model). The selection rules are the same as in OpenCutList.
-2. **Extensions → OCL Viyar Export → Export to Viyar (GibLab)...**
-3. The export writes three files:
-   - `<name>.project`: upload this to viyar.pro → Conversion
+2. **Extensions → OCL Viyar Export → Export to ViyarPro...** (or **Export to Viyar (GibLab)...**)
+3. The export writes:
+   - `<name>.project`: the file to load in ViyarPro. A ViyarPro project holds one sheet material, so with
+     several materials there is one file per material: `<name>_<material>_<thickness>.project`.
+   - `<name>.xml` (ViyarPro format only): the unencrypted project, for checking
    - `<name>.json`: the intermediate data, for debugging
    - `<name>.report.txt`: a summary and warnings (unknown features, skipped parts, ...)
 
@@ -23,7 +30,11 @@ OpenCutList's cutlist options saved in the model (auto orient, flipped detection
 - Each panel is a component with an OpenCutList **sheet good** material. Other material types are skipped (listed in the report).
 - Panel length is along OpenCutList's length axis, which is also the grain direction and GibLab's `l`.
 - Edge banding comes from OpenCutList's edge materials. Band thickness and width come from the edge material's settings.
-- The material name is exported as-is. ViyarPro doesn't map GibLab material names or codes, so pick the real material in Viyar after import.
+- ViyarPro format: the Viyar article (code) is taken from the material name like Bazis does,
+  `<name> (Артикул <code>)`, e.g. `ДСП Egger W980 ST2 18 (Артикул 81234)`. The same goes for edge-band materials.
+  Without it the article is empty (reported) and ViyarPro asks for the material.
+- GibLab format: the material name is exported as-is. ViyarPro doesn't map GibLab material names or codes, so pick the real material in Viyar after import.
+- Grain: OpenCutList's *grained* material setting gives `grain="1"` (texture along the length) or `"0"`.
 
 ## Drillings (surface features)
 
@@ -63,8 +74,9 @@ f_<spec>[ <free comment>]
 - Text after the first space is ignored (comment): `f_d5x11.5 shelf pin`.
 - SketchUp's uniqueness suffixes are ignored: `f_d5x11.5#1`, `f_d5x11.5_1`.
 - Face vs. edge is always taken from the geometry; `_face` / `_edge` in a preset name is only a label.
-- A through hole on a face gets depth = thickness + 2 mm. A depth ≥ thickness also counts as through. Through holes on edges are not supported.
-- Edge holes are exported centered in the thickness. A warning is reported if the component is off-center.
+- A through hole on a face gets depth = thickness + 5 mm (ViyarPro format, like Bazis2Viyar) or + 2 mm (GibLab). A depth ≥ thickness also counts as through. Through holes on edges are not supported.
+- ViyarPro format: a 7.1 mm hole is exported as a 7 mm confirmat hole with countersink (subtype `48`), the Bazis2Viyar convention.
+- Edge holes keep their position across the thickness in the ViyarPro format. GibLab exports them centered; a warning is reported if the component is off-center.
 - Mirrored (flipped) panel instances: holes move to the opposite face.
 
 ### Presets
@@ -92,6 +104,44 @@ Seen from the **front** face:
 The front face is the one whose normal is `length × width` (right-handed). Holes on the back face go to a
 separate GibLab operation (`side="false"`) and use the same x/y.
 
+## ViyarPro project format (from Bazis2Viyar 5.10, not yet verified with this plugin's output)
+
+The file is SJCL JSON (`sjcl.encrypt` defaults: PBKDF2-SHA256 10000 iterations, AES-128-CCM, 64-bit tag)
+with Bazis2Viyar's fixed password. Decrypted, it is XML:
+
+```xml
+<project currency="" version="1" ...>
+<viyar version="27">
+  <creator id="Bazis2Viyar" version="5.10" .../> <constructor id="dsp" site=""/>
+  <materials>
+    <material id="1" type="sheet" article="81234" name="..." width="3000" height="3000" thickness="18"/>
+    <material id="2" type="band" article="..." name="..." height="22" thickness="1"/>
+  </materials>
+  <details>
+    <detail id="1" material="1" amount="2" widthFull="600.0" heightFull="400.0" multiplicity="1" grain="1" description="A.side" ...>
+      <edges><left type="kromka" param="2" drop="0"/> <top .../> <right type="" param="" .../> <bottom .../></edges>
+      <operations>
+        <operation id="1" type="drilling" side="1" x="120.0" y="130.0" xo="120.0" yo="130.0" xl="0" yl="0" d="5" depth="5.0"/>
+      </operations>
+    </detail>
+  </details>
+</viyar>
+</project>
+```
+
+| Hole on | `side` | `x` | `y` |
+|---|---|---|---|
+| front face | 1 | x | y |
+| left edge (x = 0) | 2 | distance from front face | y |
+| top edge (y = width) | 3 | x | distance from front face |
+| right edge (x = length) | 4 | distance from front face | y |
+| bottom edge (y = 0) | 5 | x | distance from front face |
+| back face | 6 | x | y (front view, like Bazis) |
+
+Other operation types Bazis2Viyar writes, for future features: `grooving`, `rabbeting`, `cornerOperation`
+(radius / chamfer / cutout corners), `shapeByPattern` (U-shape, rectangle, circle, arc, smile cut-outs),
+`clipping` (parts under 70 mm), and edge types `srez` / `srezkrom` (edge bevels).
+
 ## GibLab XML mapping (verified on ViyarPro import, Oct 2026)
 
 | Panel side | Edge band attribute | Edge-hole tag | Hole coordinate |
@@ -113,11 +163,12 @@ separate GibLab operation (`side="false"`) and use the same x/y.
 - Dev install: copy `tools/dev_loader.rb` into SketchUp's `Plugins` folder, restart SketchUp, then use
   **Reload extension (dev)** after edits.
 - Build the installable package: `python3 tools/build_rbz.py` → `dist/ocl_viyar_<version>.rbz`.
-- `features.rb` and `giblab_writer.rb` are plain Ruby (no SketchUp API). Run their tests with
+- `features.rb`, `sjcl.rb`, `viyar_writer.rb` and `giblab_writer.rb` are plain Ruby (no SketchUp API). Run their tests with
   `for t in test/test_*.rb; do ruby -w "$t"; done`.
 - Write a sample `.project` for a manual ViyarPro import check:
-  `OCL_VIYAR_SAMPLE_OUT=/mnt/c/prj/ocl_viyar_writer_test.project ruby test/test_giblab_writer.rb -n test_write_sample_file`
+  `OCL_VIYAR_SAMPLE_OUT=/mnt/c/prj/ocl_viyar_test.project ruby test/test_viyar_writer.rb -n test_write_sample_project`
+  (GibLab: `ruby test/test_giblab_writer.rb -n test_write_sample_file`)
 
 ## Not yet supported
 
-Grooves (GibLab `GR` operation), Viyar fitting codes, curved cut-outs, mapping band names to ViyarPro's "customer edges".
+Grooves and rabbets, corner processing, cut-outs, clipping of parts under 70 mm, edge bevels, fittings (`products`).
