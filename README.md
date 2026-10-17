@@ -30,9 +30,10 @@ OpenCutList's cutlist options saved in the model (auto orient, flipped detection
 - Each panel is a component with an OpenCutList **sheet good** material. Other material types are skipped (listed in the report).
 - Panel length is along OpenCutList's length axis, which is also the grain direction and GibLab's `l`.
 - Edge banding comes from OpenCutList's edge materials. Band thickness and width come from the edge material's settings.
-- ViyarPro format: the Viyar article (code) is taken from the material name like Bazis does,
-  `<name> (Артикул <code>)`, e.g. `ДСП Egger W980 ST2 18 (Артикул 81234)`. The same goes for edge-band materials.
-  Without it the article is empty (reported) and ViyarPro asks for the material.
+- ViyarPro format: the Viyar article (code) is the first line of the OpenCutList material **description**
+  (Materials → edit material → Description), e.g. `81234`. The same goes for edge-band materials. If the
+  description is empty, the name is used like Bazis does: `<name> (Артикул <code>)`. Without either, the
+  article is empty (reported) and ViyarPro asks for the material.
 - GibLab format: the material name is exported as-is. ViyarPro doesn't map GibLab material names or codes, so pick the real material in Viyar after import.
 - Grain: OpenCutList's *grained* material setting gives `grain="1"` (texture along the length) or `"0"`.
 

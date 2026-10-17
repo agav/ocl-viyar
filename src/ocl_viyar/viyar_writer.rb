@@ -61,8 +61,8 @@ module OclViyar
       band_ids = {}
       bands.each_with_index { |b, i| band_ids[b[:key]] = i + 2 }   # sheet material is id 1
 
-      sheet_name, sheet_article = split_name_code(material[:name])
-      @warnings << "Material '#{material[:name]}' has no article; name it '<name> (Артикул <code>)'" if sheet_article.empty?
+      sheet_name, sheet_article = name_and_article(material)
+      @warnings << "Material '#{material[:name]}' has no article; put it in the OpenCutList material description" if sheet_article.empty?
 
       x = '<?xml version="1.0" encoding="windows-1251" ?>' + "\n"
       x << _open('project', 'currency' => '', 'version' => '1', 'costOperation' => '0', 'costMaterial' => '0', 'cost' => '0',
@@ -76,7 +76,7 @@ module OclViyar
       x << _tag('material', 'id' => 1, 'type' => 'sheet', 'article' => sheet_article, 'name' => sheet_name,
                             'width' => SHEET_SIZE, 'height' => SHEET_SIZE, 'thickness' => _num(material[:thickness], 1))
       bands.each do |b|
-        name, article = split_name_code(b[:name])
+        name, article = name_and_article(b)
         @warnings << "Edge band '#{b[:name]}' has no article" if article.empty?
         x << _tag('material', 'id' => band_ids[b[:key]], 'type' => 'band', 'article' => article, 'name' => name,
                               'height' => _num(b[:width], 1), 'thickness' => _num(b[:thickness], 2))
@@ -89,6 +89,13 @@ module OclViyar
 
       x << "</viyar>\n</project>\n"
       x
+    end
+
+    # Article from the material's :article (OpenCutList description), else from its name
+    def name_and_article(material)
+      name, code = split_name_code(material[:name])
+      article = material[:article].to_s.strip
+      [ name, article.empty? ? code : article ]
     end
 
     # Bazis convention: "<name> (Артикул <code>)", or the code on the second line of the name.

@@ -108,6 +108,14 @@ class TestViyarWriter < Minitest::Test
     assert_equal %w[sheet band], hdf.get_elements('//material').map { |m| m.attributes['type'] }
   end
 
+  def test_article_from_description_wins_over_name
+    @project[:materials][0][:article] = '81234'
+    @project[:bands][1][:article] = '555'
+    m = parse(OclViyar::ViyarWriter.new(@project).to_xml(KEY)).get_elements('//material')
+    assert_equal [ [ '81234', 'ДСП Egger W980' ], [ '555', 'Band2' ], [ '777', 'Кромка ПВХ 1x22' ] ],
+                 m.map { |e| values(e, 'article', 'name') }
+  end
+
   def test_split_name_code
     assert_equal [ 'ДСП Біла', '81234' ], @writer.split_name_code('ДСП "Біла" (Артикул 81234)')
     assert_equal [ 'ДСП', '81234' ], @writer.split_name_code("ДСП\n81234")

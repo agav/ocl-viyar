@@ -127,7 +127,16 @@ module OclViyar
       rescue StandardError
         # keep default sheet size
       end
-      { key: key, name: group.material_display_name, thickness: thickness, length: length, width: width, grained: _grained(gdef) }
+      { key: key, name: group.material_display_name, thickness: thickness, length: length, width: width, grained: _grained(gdef),
+        article: _article(gdef.material_attributes.material) }
+    end
+
+    # Viyar article: first line of the OpenCutList material description
+    def _article(material)
+      description = material && material.get_attribute(Ladb::OpenCutList::Plugin::ATTRIBUTE_DICTIONARY, 'description')
+      description.to_s.strip.lines.first.to_s.strip
+    rescue StandardError
+      ''
     end
 
     # Unknown -> true: keeps the texture along the part length
@@ -162,7 +171,8 @@ module OclViyar
         band_thickness = edge_group_def ? _mm(edge_group_def.std_thickness) : 0.0
         band_width = edge_group_def ? _mm(edge_group_def.std_width) : 0.0
         band_key = "#{material.display_name}|#{band_thickness}|#{band_width}"
-        bands[band_key] ||= { key: band_key, name: material.display_name, thickness: band_thickness, width: band_width }
+        bands[band_key] ||= { key: band_key, name: material.display_name, thickness: band_thickness, width: band_width,
+                              article: _article(material) }
         edges[side] = band_key
       end
 
